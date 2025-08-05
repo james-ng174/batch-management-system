@@ -1,0 +1,27 @@
+version: '3.8'
+services:
+  batch-scheduler-app:
+    container_name: batch_scheduler_app
+    restart: always
+    env_file: .env
+    build: .
+    volumes:
+      - ./private_key:/root/.ssh
+    networks:
+      - batch_scheduler_network
+  nginx:
+    container_name: batch_scheduler_app_nginx
+    restart: always
+    image: "nginx:latest"
+    ports:
+      - "5085:5085"
+    volumes:
+      - ./nginx:/etc/nginx/conf.d
+    networks:
+      - batch_scheduler_network
+    depends_on:
+      - batch-scheduler-app
+networks:
+  batch_scheduler_network:
+    driver: bridge
+ 

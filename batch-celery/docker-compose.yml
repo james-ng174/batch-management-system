@@ -1,0 +1,133 @@
+version: '3.8'  # Updated version
+
+services:
+  web:
+    build: .
+    command: python manage.py runserver 0.0.0.0:5501
+    volumes:
+      - .:/code
+    ports:
+      - "5501:5501"
+    env_file:
+      - .env
+    environment:
+      - ALLOWED_HOSTS=web,localhost,127.0.0.1,10.38.65.203,10.38.124.82
+      - CELERY_BROKER_URL=redis://10.38.124.82:6379/0
+      - DATABASE_URL=postgres://tangosvc:123456@10.38.124.82:5432/scheduler?currentSchema=batch_celery
+      - CELERY_RESULT_BACKEND=django-db
+      - BASE_URL=http://10.38.124.82:5500
+      - LOKI_URL=http://localhost:3100/loki/api/v1/push
+      - LOG_FILE=/var/log/batch-celery/batch-celery.log
+      - LOG_MAX_BYTES=10485760
+      - LOG_BACKUP_COUNT=7
+      - LOG_LEVEL=INFO
+    depends_on:
+      - redis
+    networks:
+      - batchbe_network
+    entrypoint: /code/entrypoint.sh
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://web:5501/celerytasks/health/"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  celerybeat:
+    build: .
+    command: celery -A batchbe beat --loglevel=debug --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    volumes:
+      - .:/code
+    env_file:
+      - .env
+    environment:
+      - ALLOWED_HOSTS=web,localhost,127.0.0.1,10.38.65.203,10.38.124.82
+      - CELERY_BROKER_URL=redis://10.38.124.82:6379/0
+      - DATABASE_URL=postgres://tangosvc:123456@10.38.124.82:5432/scheduler?currentSchema=batch_celery
+      - CELERY_RESULT_BACKEND=django-db
+      - BASE_URL=http://10.38.124.82:5500
+      - LOKI_URL=http://localhost:3100/loki/api/v1/push
+      - LOG_FILE=/var/log/batch-celery/batch-celery.log
+      - LOG_MAX_BYTES=10485760
+      - LOG_BACKUP_COUNT=7
+      - LOG_LEVEL=INFO
+    depends_on:
+      web:
+        condition: service_healthy
+    networks:
+      - batchbe_network
+
+  flower:
+    build: .
+    command: celery -A batchbe flower --address=0.0.0.0 --port=5555
+    ports:
+      - "5555:5555"
+    volumes:
+      - .:/code
+    env_file:
+      - .env
+    environment:
+      - ALLOWED_HOSTS=web,localhost,127.0.0.1,10.38.65.203,10.38.124.82
+      - CELERY_BROKER_URL=redis://10.38.124.82:6379/0
+      - DATABASE_URL=postgres://tangosvc:123456@10.38.124.82:5432/scheduler?currentSchema=batch_celery
+      - CELERY_RESULT_BACKEND=django-db
+      - BASE_URL=http://10.38.124.82:5500
+      - LOKI_URL=http://localhost:3100/loki/api/v1/push
+      - LOG_FILE=/var/log/batch-celery/batch-celery.log
+      - LOG_MAX_BYTES=10485760
+      - LOG_BACKUP_COUNT=7
+      - LOG_LEVEL=INFO
+    depends_on:
+      web:
+        condition: service_healthy
+    networks:
+      - batchbe_network
+
+  celery_grafana:
+    image: docker.io/ovalmoney/celery-exporter
+    command:
+      - --broker-url=redis://redis:6379/0
+    ports:
+      - "9540:9540"
+    networks:
+      - batchbe_network
+    depends_on:
+      - redis
+
+  worker3:
+    build: .
+    command: celery -A batchbe worker -Q 8a5ba39b7fa9441199f4bce94e1f3f3f --loglevel=debug
+    volumes:
+      - .:/code
+    env_file:
+      - .env
+    environment:
+      - ALLOWED_HOSTS=web,localhost,127.0.0.1,10.38.65.203,10.38.124.82
+      - CELERY_BROKER_URL=redis://10.38.124.82:6379/0
+      - DATABASE_URL=postgres://tangosvc:123456@10.38.124.82:5432/scheduler?currentSchema=batch_celery
+      - CELERY_RESULT_BACKEND=django-db
+      - BASE_URL=http://10.38.124.82:5500
+      - LOKI_URL=http://localhost:3100/loki/api/v1/push
+      - LOG_FILE=/var/log/batch-celery/batch-celery.log
+      - LOG_MAX_BYTES=10485760
+      - LOG_BACKUP_COUNT=7
+      - LOG_LEVEL=INFO
+    depends_on:
+      web:
+        condition: service_healthy
+    networks:
+      - batchbe_network
+
+  redis:
+    image: "docker.io/library/redis:alpine"
+    ports:
+      - "6379:6379"
+    networks:
+      - batchbe_network
+
+volumes:
+  grafana-storage:
+  loki-storage:
+
+networks:
+  batchbe_network:
+    driver: bridge

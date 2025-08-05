@@ -1,0 +1,91 @@
+version: '3.8'  # Updated version
+
+services:
+  web:
+    build: .
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - .:/code
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=django-db
+      - DATABASE_URL=postgres://${POSTGRES_USERNAME}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}/${POSTGRES_DB}
+      - ALLOWED_HOSTS=web,localhost,127.0.0.1
+    depends_on:
+      - redis
+    networks:
+      - batchbe_network
+    entrypoint: /code/entrypoint.sh
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://web:8000/celerytasks/health/"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  celerybeat:
+    build: .
+    command: celery -A batchbe beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    volumes:
+      - .:/code
+    env_file:
+      - .env
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=django-db
+      - DATABASE_URL=postgres://${POSTGRES_USERNAME}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}/${POSTGRES_DB}
+      - ALLOWED_HOSTS=web,localhost,127.0.0.1
+    depends_on:
+      web:
+        condition: service_healthy
+    networks:
+      - batchbe_network
+
+  flower:
+    build: .
+    command: celery -A batchbe flower --address=0.0.0.0 --port=5555
+    ports:
+      - "5555:5555"
+    volumes:
+      - .:/code
+    env_file:
+      - .env
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=django-db
+      - DATABASE_URL=postgres://${POSTGRES_USERNAME}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}/${POSTGRES_DB}
+      - ALLOWED_HOSTS=web,localhost,127.0.0.1
+    depends_on:
+      web:
+        condition: service_healthy
+    networks:
+      - batchbe_network
+
+  celery_grafana:
+    image: docker.io/ovalmoney/celery-exporter
+    command:
+      - --broker-url=redis://redis:6379/0
+    ports:
+      - "9540:9540"
+    networks:
+      - batchbe_network
+    depends_on:
+      - redis
+
+  redis:
+    image: "docker.io/library/redis:alpine"
+    ports:
+      - "6379:6379"
+    networks:
+      - batchbe_network
+
+volumes:
+  grafana-storage:
+  loki-storage:
+
+networks:
+  batchbe_network:
+    driver: bridge

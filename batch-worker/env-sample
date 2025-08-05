@@ -1,0 +1,7 @@
+ALLOWED_HOSTS=web,localhost,127.0.0.1,10.38.65.203
+CELERY_BROKER_URL=redis://10.38.65.203:6379/0
+DATABASE_URL=postgres://haih4:123456@10.38.65.203:5432/celery-be
+CELERY_RESULT_BACKEND=django-db
+BASE_URL=http://10.38.65.223:5085
+LOKI_URL=http://localhost:3100/loki/api/v1/push
+LOG_DIR=/var/log/

@@ -1,0 +1,34 @@
+version: 1
+formatters:
+  default:
+    format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    datefmt: '%Y-%m-%d %H:%M:%S'
+
+handlers:
+  file:
+    class: logging.FileHandler
+    level: DEBUG
+    formatter: default
+    filename: '/var/log/celery_be.log'
+
+  loki:
+    class: logging_loki.LokiHandler
+    level: DEBUG
+    formatter: default
+    url: 'http://localhost:3100/loki/api/v1/push'  # Specify your Loki URL here
+    tags:
+      application: 'batch-celery'
+    version: '1'
+    # Add timeout and error handling
+    timeout: 5
+    retry: 5
+
+loggers:
+  batch-celery-logger:
+    level: DEBUG
+    handlers: [file, loki]
+    propagate: no
+
+root:
+  level: DEBUG
+  handlers: [file, loki]
